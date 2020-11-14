@@ -63,7 +63,7 @@ class TestRegressions(unittest.TestCase):
         X_test = pd.DataFrame({ "column1": [4, 5, 6], "column2": [10, 11, 12] })
         y_train = np.array([1, 2, 3])
         y_test = np.array([4, 5, 6])
-        X, y = join_dataset(X_train, X_test, y_train, y_test)
+        X, y = join_dataset([X_train, X_test, y_train, y_test])
         self.assertTrue(mock_pandas.concat.called)
         self.assertTrue(mock_pandas.concat.call_count, 2)
         self.assertTrue(mock_pandas.concat.call_args[0][0], [y_train, y_test])
