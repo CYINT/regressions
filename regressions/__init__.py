@@ -7,7 +7,6 @@ from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from scipy.stats import pearsonr, bartlett, levene, shapiro, normaltest, boxcox, PearsonRConstantInputWarning
-simplefilter("ignore", PearsonRConstantInputWarning)
 
 
 def calculate_residuals(model, X, y):
@@ -15,53 +14,54 @@ def calculate_residuals(model, X, y):
     residuals = y - predictions
     return residuals 
 
-def is_multicolinear(X, colinearity_threshold=0.6, ignore_nan=True):
+def has_multicolinearity(X, colinearity_threshold=0.6, ignore_nan=True):
     columns = X.columns
     for column_under_test in columns:
         for column in columns:
             if column_under_test == column:
                 continue
 
+            simplefilter("ignore", PearsonRConstantInputWarning)
             result = pearsonr(X[column_under_test], X[column])
-            
+            simplefilter("default", PearsonRConstantInputWarning)
             if np.isnan(result[0]) and not ignore_nan:
-                return False
-            else:
+                return True
+            elif np.isnan(result[0]):
                 continue 
 
             if abs(result[0]) >= colinearity_threshold:
-                return False
+                return True
 
-    return True
+    return False
 
 def model_score_acceptable(model, threshold):
     return True
 
-def errors_are_normal(residuals, ha_threshold=0.05):
+def normal_test(residuals, ha_threshold=0.05):
     result = shapiro(residuals)
     if ha_threshold >= result[1]:
         return False
 
     return True
 
-def errors_dont_autocorrelate(residuals, autocorrelation_threshold=0.6):
-    result = acf(residuals)
+def errors_autocorrelate(residuals, autocorrelation_threshold=0.6):
+    result = acf(residuals, nlags=40, fft=False)
     test = abs(result[1:]) >= autocorrelation_threshold
     if True in test:
-        return False
+        return True
 
-    return True
+    return False
 
-def error_features_dont_correlate(residuals, X, correlation_threshold=0.6):
+def error_features_correlate(residuals, X, correlation_threshold=0.6):
     for column in X.columns:
         a = X[column].to_numpy()
         if (a[0] == a).all():
             continue
         result = pearsonr(residuals, X[column])
         if abs(result[0]) >= correlation_threshold:
-            return False
+            return True
     
-    return True 
+    return False 
 
 def is_homoscedastic(residuals, y, ha_threshold=0.05):
     result = bartlett(residuals, y)
@@ -70,7 +70,8 @@ def is_homoscedastic(residuals, y, ha_threshold=0.05):
     
     return True
 
-def select_best_features(X_train, y_train, X_test, y_test, train_model_type, alpha=0.05, max_feature_row_ratio=0.25, threshold=0.05, cv=5):
+def select_best_features(dataset, train_model_type, alpha=0.05, max_feature_row_ratio=0.25, threshold=0.05, cv=5):
+    X_train, y_train, X_test, y_test = dataset
     feature_names = X_train.columns
     model_candidates = []
     for column in feature_names:
@@ -120,7 +121,7 @@ def join_dataset(X_train, X_test, y_train, y_test):
     y.sort_index(inplace=True)
     return [X, y]
 
-def boxcox_transform(X, y, min_translation=0.01):
+def boxcox_transform(y, min_translation=0.01):
     a = min_translation - y.min()
     y_transformed, y_lambda = boxcox(y+a)
     return [y_transformed, y_lambda, a]
@@ -137,10 +138,10 @@ def detect_overfitting(model, dataset, cv=5, overfit_threshold=0.5, scorer=None)
 def satisfies_gauss_markov(model, dataset):
     X_train, _, y_train, _ = dataset
     residuals = calculate_residuals(model, X_train, y_train)
-    no_multicolinearity = is_multicolinear(X_train)
-    normal_errors = errors_are_normal(residuals)
-    no_autocorrelation = errors_dont_autocorrelate(residuals)
-    no_error_feature_correlation = error_features_dont_correlate(residuals, X_train)
+    no_multicolinearity = not has_multicolinearity(X_train)
+    normal_errors = normal_test(residuals)
+    no_autocorrelation = not errors_autocorrelate(residuals)
+    no_error_feature_correlation = not error_features_correlate(residuals, X_train)
     homoscedasticity = is_homoscedastic(residuals, y_train)
     return [homoscedasticity, no_multicolinearity, normal_errors, no_autocorrelation, no_error_feature_correlation]
 
@@ -169,7 +170,7 @@ def select_satisfies_gauss_markov(candidate_list, transform_heteroscedastic=Fals
         homoscedasticity, no_multicolinearity, normal_errors, no_autocorrelation, no_error_feature_correlation = gauss_markov_conditions
         if not homoscedasticity and no_multicolinearity and normal_errors and no_autocorrelation and no_error_feature_correlation and transform_heteroscedastic:
             X, y = join_dataset(X_train, X_test, y_train, y_test)
-            model, dataset, transform_vars = boxcox_transform(X, y, boxcox_translation)
+            model, dataset, transform_vars = boxcox_transform(y, boxcox_translation)
             X_train, X_test, y_train, y_test = dataset
             residuals = calculate_residuals(model, X_train, y_train)
             homoscedasticity = is_homoscedastic(residuals, y_train)
@@ -190,7 +191,7 @@ def select_passed_accuracy_test(candidate_list, accuracy_tests=[0.25,0.5,0.95]):
     passed_accuracy_test = []
 
     for model_set in candidate_list:
-        #if passes_accuracy_test():
+        #TODO implement accuracy testing
         passed_accuracy_test.append(model_set)
 
     return passed_accuracy_test
