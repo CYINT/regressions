@@ -34,7 +34,7 @@ def has_multicolinearity(X, colinearity_threshold=0.6, ignore_nan=True):
 
     return False
 
-def model_score_acceptable(model, threshold):
+def model_score_acceptable(model, threshold, cv=5, ):
     return True
 
 def normal_test(residuals, ha_threshold=0.05):
@@ -70,7 +70,7 @@ def is_homoscedastic(residuals, y, ha_threshold=0.05):
     
     return True
 
-def select_best_features(dataset, train_model_type, alpha=0.05, max_feature_row_ratio=0.25, threshold=0.05, cv=5):
+def select_best_features(dataset, model_type, alpha=0.05, max_feature_row_ratio=0.25, threshold=0.05, cv=5, overfit_threshold=0.5, accuracy_tests=[0.25,0.5,0.95], transform_heteroscedastic=True, boxcox_translation=0.01, scorer=None, verbose=False):
     X_train, y_train, X_test, y_test = dataset
     feature_names = X_train.columns
     model_candidates = []
@@ -97,15 +97,24 @@ def select_best_features(dataset, train_model_type, alpha=0.05, max_feature_row_
         indices = fs.get_support(indices=True)
         selected_features = feature_names[indices]
         X_train_fs.columns = selected_features
-        model, dataset = train_model_type(X_train_fs, y_train, X_test_fs, y_test)
-        if model_score_acceptable(model, threshold):
+        model = model_type['estimator'].fit(X_train_fs, y_train)
+        if True in fs.pvalues_ <= threshold:
             model_candidates.append({
                 'model': model,
                 'dataset': dataset,
-                'features': selected_features
+                'features': selected_features,
+                'type': model_type['type']
             })
 
-    return select_winning_model(model_candidates)
+    return select_winning_model(
+        model_candidates,
+        overfit_threshold,
+        accuracy_tests,
+        transform_heteroscedastic,
+        boxcox_translation,
+        scorer,
+        verbose
+    )
 
 def select_features(X_train, y_train, X_test, k):
     fs = SelectKBest(score_func=f_regression, k=k)
@@ -162,6 +171,10 @@ def select_non_overfit(model_candidates, cv=5, overfit_threshold=0.5, scorer=Non
 def select_satisfies_gauss_markov(candidate_list, transform_heteroscedastic=False, boxcox_translation=0.01):
     passed_gauss_markov = []
     for model_set in candidate_list:
+        if 'type' in model_set and model_set['type'] == 'non-linear':
+            passed_gauss_markov.append(model_set)
+            continue
+
         gauss_markov_conditions = satisfies_gauss_markov(model_set['model'], model_set['dataset'])
         if not False in gauss_markov_conditions:
             passed_gauss_markov.append(model_set)
