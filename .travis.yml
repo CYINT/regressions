@@ -1,0 +1,22 @@
+language: python
+python:
+- '3.8'
+install:
+- pip install -r requirements.txt
+script:
+- coverage run -m unittest discover -s tests
+after_success:
+- bash <(curl -s https://codecov.io/bash)
+deploy:
+  provider: pypi
+  username: cyint
+  skip_existing: true
+  distributions: sdist bdist_wheel
+  on:
+    tags: true
+  password:
+    secure: Y4NBwdTVyLbkWxzCXRiy9t7vCHK5UCRYSps34XYaLT7gPZ+ZBbgZwH2j6jEDSna3mKaCp2r2oNjJCdfS6xmVqq128ZHefukWAOkajOza2INt2YDsUJAYWA67oX4NfCPefhybvszB6VeJbMTcEBCDzUDgc7wFSDDxmqZQnV6HOADG5X5QHUtmT+cyh5b3aCAsAoYYc53AaUEVooGNmZjdrCvG5HA/qX0Wu8SXbjodmhz/ObqgpSJO3t67DFn5gwHYsdee+M4N2M4/uEn4uEVOft1nPv73ZzFGbuIGMyGaFCzFJZ+hRSc8q3/IatzVY7E8/Ow3CNBGORZm9Z2KE1zEs7b5t5t7hV+lAb3wBzVi5jWzKGFxZiB2oflmaB83qCblujlofnWUBWgsZNFlw+AEwkBsCvCWqUq3e33KeKUsEDqUjcLs2R/Ii8Kcgm0OFQYqHmtFRIFUU3Q7jGu0StLzIuYKfbSkYrQUiOXbiV7EHyR2Ro7ANEijX9OkYDRGSBbrHvB2pT/4611/y8yb4FklxIdkTUmjsxyVQAVJIT/F5dkf4eVc3OuwxhDw7KLLnc98yvMf9inV2bWRI03CSgp1IVGV5sHy0QjC9L1smlB3XHEmzU00p3ukjMW6kQOt+Akras9i/ehrhjT/BJED+ZXxWFUB0jS8sDVZu8vZiGfuIRI=
+branches:
+  only:
+  - master
+  - "/\\d+\\.\\d+\\.\\d+/"
