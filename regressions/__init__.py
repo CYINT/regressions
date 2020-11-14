@@ -4,7 +4,7 @@ import statsmodels.api as sm
 from warnings import simplefilter
 from statsmodels.tsa.stattools import acf
 from sklearn.feature_selection import SelectKBest, f_regression
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from scipy.stats import pearsonr, bartlett, levene, shapiro, normaltest, boxcox, PearsonRConstantInputWarning
 
@@ -97,23 +97,25 @@ def select_best_features(dataset, model_type, alpha=0.05, max_feature_row_ratio=
         indices = fs.get_support(indices=True)
         selected_features = feature_names[indices]
         X_train_fs.columns = selected_features
-        model = model_type['estimator'].fit(X_train_fs, y_train)
-        if True in fs.pvalues_ <= threshold:
+        X_test_fs.columns = selected_features
+        model = model_type['estimator']().fit(X_train_fs, y_train)
+        if True in (fs.pvalues_ <= threshold):
             model_candidates.append({
                 'model': model,
-                'dataset': dataset,
+                'dataset': [X_train_fs, X_test_fs, y_train, y_test],
                 'features': selected_features,
                 'type': model_type['type']
             })
 
     return select_winning_model(
         model_candidates,
-        overfit_threshold,
-        accuracy_tests,
-        transform_heteroscedastic,
-        boxcox_translation,
-        scorer,
-        verbose
+        cv=cv,
+        overfit_threshold=overfit_threshold,
+        accuracy_tests=accuracy_tests,
+        transform_heteroscedastic=transform_heteroscedastic,
+        boxcox_translation=boxcox_translation,
+        scorer=scorer,
+        verbose=verbose
     )
 
 def select_features(X_train, y_train, X_test, k):
@@ -123,7 +125,8 @@ def select_features(X_train, y_train, X_test, k):
     X_test_fs = fs.transform(X_test)
     return X_train_fs, X_test_fs, fs
 
-def join_dataset(X_train, X_test, y_train, y_test):
+def join_dataset(dataset):
+    X_train, X_test, y_train, y_test = dataset
     X = pd.concat([X_train, X_test])
     y = pd.concat([y_train, y_test])
     X.sort_index(inplace=True)
@@ -136,10 +139,10 @@ def boxcox_transform(y, min_translation=0.01):
     return [y_transformed, y_lambda, a]
 
 def detect_overfitting(model, dataset, cv=5, overfit_threshold=0.5, scorer=None):
-    X_train, y_train, X_test, y_test = dataset
+    X_train, X_test, y_train, y_test = dataset
     training_score = cross_val_score(model, X_train, y_train, scoring=scorer, cv=cv).mean()
     test_score = cross_val_score(model, X_test, y_test, scoring=scorer, cv=cv).mean()
-    if training_score > test_score * overfit_threshold:
+    if training_score > (test_score * overfit_threshold):
         return True
     
     return False
@@ -161,9 +164,7 @@ def print_verbose(message, verbose=True):
 def select_non_overfit(model_candidates, cv=5, overfit_threshold=0.5, scorer=None):
     not_overfit = []
     for model_set in model_candidates:
-        model = model_set['model']
-        dataset = model_set['dataset']
-        if not detect_overfitting(model, dataset, cv, overfit_threshold, scorer):
+        if not detect_overfitting(model_set['model'], model_set['dataset'], cv, overfit_threshold, scorer):
             not_overfit.append(model_set)
 
     return not_overfit
@@ -182,9 +183,12 @@ def select_satisfies_gauss_markov(candidate_list, transform_heteroscedastic=Fals
     
         homoscedasticity, no_multicolinearity, normal_errors, no_autocorrelation, no_error_feature_correlation = gauss_markov_conditions
         if not homoscedasticity and no_multicolinearity and normal_errors and no_autocorrelation and no_error_feature_correlation and transform_heteroscedastic:
-            X, y = join_dataset(X_train, X_test, y_train, y_test)
-            model, dataset, transform_vars = boxcox_transform(y, boxcox_translation)
+            X, y = join_dataset(model_set['dataset'])
+            transform_vars = boxcox_transform(y, boxcox_translation)
+            y_transformed = transform_vars[0]
+            dataset = train_test_split(X, y_transformed, train_size=0.8, random_state=1)
             X_train, X_test, y_train, y_test = dataset
+            model = model_set['model'].fit(X_train, y_train)
             residuals = calculate_residuals(model, X_train, y_train)
             homoscedasticity = is_homoscedastic(residuals, y_train)
             new_model_set = {
@@ -211,10 +215,11 @@ def select_passed_accuracy_test(candidate_list, accuracy_tests=[0.25,0.5,0.95]):
 
 def select_best_score(candidate_list, cv=5, scorer=None):
     best_score = -9999
+    winning_model = None
     for model_set in candidate_list:
         model = model_set['model']
         X_train, _, y_train, _ = model_set['dataset']
-        score = cross_val_score(model, X_train, y_train, scoring=scorer, cv=cv)
+        score = cross_val_score(model, X_train, y_train, scoring=scorer, cv=cv).mean()
         if score > best_score:  
             best_score = score
             winning_model = model_set
@@ -222,7 +227,6 @@ def select_best_score(candidate_list, cv=5, scorer=None):
     return winning_model
 
 def select_winning_model(model_candidates, cv=5, overfit_threshold=0.5, accuracy_tests=[0.25,0.5,0.95], transform_heteroscedastic=True, boxcox_translation=0.01, scorer=None, verbose=False):
-    winning_model = None
     candidate_list = model_candidates
     candidate_list = select_non_overfit(candidate_list, cv, overfit_threshold, scorer)
     candidate_list = select_satisfies_gauss_markov(candidate_list, transform_heteroscedastic, boxcox_translation)
