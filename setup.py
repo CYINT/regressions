@@ -4,7 +4,7 @@ from distutils.core import setup
 
 setup(
     name='cyint-regressions',
-    version='0.0.1',
+    version='0.5.0',
     author='Daniel Fredriksen',
     author_email='dfredriksen@cyint.technology',
     packages=find_packages(),

@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import unittest
 from unittest.mock import Mock, MagicMock, patch, call
-from regressions import normal_test, calculate_residuals, has_multicolinearity, errors_autocorrelate 
-from regressions import error_features_correlate, is_homoscedastic, boxcox_transform, join_dataset
+from cyint_regressions import normal_test, calculate_residuals, has_multicolinearity, errors_autocorrelate 
+from cyint_regressions import error_features_correlate, is_homoscedastic, boxcox_transform, join_dataset
 sys.path.append('.')
 
 @patch('regressions.boxcox', return_value=[[1, 2, 3], 1])
@@ -72,7 +72,7 @@ class TestRegressions(unittest.TestCase):
         y = np.array([1, 2, 4, 8, 16, 32])
         _, _, _ = boxcox_transform(y)
         self.assertTrue(mock_boxcox.called)
-        self.assertEquals(mock_boxcox.call_count, 1)
+        self.assertEqual(mock_boxcox.call_count, 1)
         
     
         
