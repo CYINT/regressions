@@ -344,7 +344,7 @@ def model_predict(model, X):
 
 
 #modified from https://saattrupdan.github.io/2020-03-01-bootstrap-prediction/
-def bootstrap_prediction_intervals(model_set, X_train, y_train, x0, alpha =  0.05):
+def bootstrap_prediction_intervals(model_set, X_train, y_train, x0, alpha =  0.05, random_seed=None):
     model = model_set
     # Number of training samples
     n = X_train.shape[0]
@@ -353,6 +353,10 @@ def bootstrap_prediction_intervals(model_set, X_train, y_train, x0, alpha =  0.0
     # of the number of samples
     nbootstraps = np.sqrt(n).astype(int)
     # Compute the m_i's and the validation residuals
+
+    if random_seed != None:
+        np.random.seed(random_seed)
+        
     bootstrap_preds, val_residuals = np.empty(nbootstraps), []
     for b in range(nbootstraps):
         train_idxs = np.random.choice(range(n-1), size = n, replace = True)

@@ -7,8 +7,8 @@ from cyint_regressions import normal_test, calculate_residuals, has_multicolinea
 from cyint_regressions import error_features_correlate, is_homoscedastic, boxcox_transform, join_dataset
 sys.path.append('.')
 
-@patch('regressions.boxcox', return_value=[[1, 2, 3], 1])
-@patch('regressions.pd')
+@patch('cyint_regressions.boxcox', return_value=[[1, 2, 3], 1])
+@patch('cyint_regressions.pd')
 
 class TestRegressions(unittest.TestCase):
 
